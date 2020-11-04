@@ -46,6 +46,8 @@ type SwaggerLoader struct {
 	visitedResponse       map[*Response]struct{}
 	visitedSchema         map[*Schema]struct{}
 	visitedSecurityScheme map[*SecurityScheme]struct{}
+
+	fileSystem http.FileSystem
 }
 
 // NewSwaggerLoader returns an empty SwaggerLoader
@@ -55,6 +57,7 @@ func NewSwaggerLoader() *SwaggerLoader {
 
 func (swaggerLoader *SwaggerLoader) resetVisitedPathItemRefs() {
 	swaggerLoader.visitedPathItemRefs = make(map[string]struct{})
+	swaggerLoader.fileSystem = &osFileSystem{}
 }
 
 // LoadSwaggerFromURI loads a spec from a remote URL
@@ -119,12 +122,23 @@ func (swaggerLoader *SwaggerLoader) readURL(location *url.URL) ([]byte, error) {
 	if location.Scheme != "" || location.Host != "" || location.RawQuery != "" {
 		return nil, fmt.Errorf("unsupported URI: %q", location.String())
 	}
-	return ioutil.ReadFile(location.Path)
+	file, err := swaggerLoader.fileSystem.Open(location.Path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return ioutil.ReadAll(file)
 }
 
 // LoadSwaggerFromFile loads a spec from a local file path
 func (swaggerLoader *SwaggerLoader) LoadSwaggerFromFile(path string) (*Swagger, error) {
 	swaggerLoader.resetVisitedPathItemRefs()
+	return swaggerLoader.loadSwaggerFromFileInternal(path)
+}
+
+func (swaggerLoader *SwaggerLoader) LoadSwaggerFromFileSystem(fileSystem http.FileSystem, path string) (*Swagger, error) {
+	swaggerLoader.resetVisitedPathItemRefs()
+	swaggerLoader.fileSystem = fileSystem
 	return swaggerLoader.loadSwaggerFromFileInternal(path)
 }
 
